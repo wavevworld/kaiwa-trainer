@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KAIWA Trainer</title>
+<style>
+  /* Self-hosted fonts: no third-party request, works offline, no visitor IP
+     leaks to Google. Subsets are generated from this file's own text —
+     see docs/DESIGN.md before adding dialogues with unusual kanji. */
+  @font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/inter-400.woff2) format('woff2')}
+  @font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/inter-500.woff2) format('woff2')}
+  @font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/inter-600.woff2) format('woff2')}
+  @font-face{font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/inter-700.woff2) format('woff2')}
+  @font-face{font-family:'Inter';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/inter-800.woff2) format('woff2')}
+  @font-face{font-family:'Zen Kaku Gothic New';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/zenkaku-500.woff2) format('woff2')}
+  @font-face{font-family:'Zen Kaku Gothic New';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/zenkaku-700.woff2) format('woff2')}
+
+  :root{
+    --navy:#0B0B16;
+    --bg:#FFFFFF;
+    --panel:#F6F7F9;
+    --ink:#111827;
+    --gray:#6B7280;
+    --line:#E5E7EB;
+    --blue:#2563EB;
+    --blue-dark:#1D4ED8;
+    --pink:#E5007D;
+    --green:#22C55E;
+    --green-soft:#DCFCE7;
+    --lime:#C6F04D;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:'Inter',-apple-system,sans-serif;
+    background:var(--bg);color:var(--ink);
+    max-width:600px;margin:0 auto;line-height:1.5;
+  }
+  .jp,.w-jp{font-family:'Zen Kaku Gothic New','Inter',sans-serif}
+
+  /* top banner + header */
+  .banner{
+    background:var(--lime);text-align:center;font-size:12.5px;font-weight:600;
+    padding:8px 14px;color:#1A2E05;
+  }
+  .header{
+    background:var(--navy);color:#fff;padding:16px 18px;
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .logo{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  .logo .jp{font-weight:700}
+  .logo-em{font-style:italic;font-weight:800}
+  .header-stat{margin-left:auto;font-size:11.5px;color:#9CA3AF;font-weight:500}
+
+  .screen{display:none;padding:20px 16px 90px;min-height:60vh}
+  .screen.active{display:block}
+  .crumb{
+    background:none;border:none;color:var(--blue);font-size:13px;font-weight:600;
+    cursor:pointer;padding:0;margin-bottom:14px;font-family:inherit;display:inline-block;
+  }
+  h2{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:2px}
+  .sub{font-size:13px;color:var(--gray);margin-bottom:18px}
+
+  /* cards */
+  .card{
+    background:#fff;border:1px solid var(--line);border-radius:14px;
+    padding:16px;margin-bottom:12px;cursor:pointer;
+    display:flex;align-items:center;gap:14px;transition:box-shadow .15s;
+  }
+  .card:active{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+  .card-kanji{
+    font-family:'Zen Kaku Gothic New',sans-serif;
+    font-size:22px;font-weight:700;color:#fff;background:var(--navy);
+    width:48px;height:48px;border-radius:10px;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .card-body{flex:1;min-width:0}
+  .card-title{font-size:15.5px;font-weight:700}
+  .card-meta{font-size:12px;color:var(--gray);margin-top:1px}
+  .badge{
+    display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    background:var(--green);color:#fff;border-radius:5px;padding:2px 7px;
+    text-transform:uppercase;
+  }
+  .badge.done{background:var(--green-soft);color:#15803D}
+  .count-pink{color:var(--pink);font-weight:800;font-size:14px}
+
+  /* controls */
+  .toolrow{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{
+    border:1px solid var(--line);background:#fff;border-radius:9px;
+    padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;
+    color:var(--ink);font-family:inherit;
+  }
+  .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chip.acc.on{background:var(--pink);border-color:var(--pink)}
+  .bigplay{
+    width:100%;background:var(--blue);color:#fff;border:none;border-radius:12px;
+    padding:14px;font-size:14.5px;font-weight:700;cursor:pointer;margin-bottom:14px;
+    font-family:inherit;
+  }
+  .bigplay:active{background:var(--blue-dark)}
+  .bigplay.playing{background:var(--navy)}
+
+  /* dialogue lines */
+  .lineRow{
+    display:flex;gap:10px;margin-bottom:9px;
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:12px 13px;cursor:pointer;
+  }
+  .lineRow.playing{border-color:var(--blue);background:#EFF6FF}
+  .who{
+    flex:0 0 auto;width:26px;height:26px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;margin-top:2px;
+    font-family:'Zen Kaku Gothic New',sans-serif;
+  }
+  .who.me{background:var(--blue);color:#fff}
+  .who.he{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+  .lineBody{flex:1;min-width:0}
+  .jp{font-size:16.5px;font-weight:500;line-height:1.55}
+  .jp b{color:var(--pink);font-weight:700}
+  .romaji{font-size:12px;color:var(--gray);margin-top:2px;font-style:italic}
+  .ru{font-size:12.5px;color:#374151;margin-top:2px}
+  .hiddenEl{display:none}
+
+  .recall .lineRow.mine .jp,
+  .recall .lineRow.mine .romaji{filter:blur(6px);transition:filter .2s}
+  .recall .lineRow.mine.revealed .jp,
+  .recall .lineRow.mine.revealed .romaji{filter:none}
+  .hintbox{
+    border-radius:10px;padding:10px 14px;font-size:12px;font-weight:500;
+    margin-bottom:12px;display:none;
+  }
+  .recall-hint{background:#FDF2F8;color:#9D174D}
+  .recall .recall-hint{display:block}
+  .range-hint{background:#FEF9C3;color:#854D0E}
+  .lineRow.inRange{border-color:#93C5FD;background:#F8FAFF}
+  .lineRow.rangeEdge{border-color:var(--blue);border-width:2px}
+
+  .donebtn{
+    width:100%;background:#fff;border:1.5px solid var(--green);color:#15803D;
+    border-radius:12px;padding:12px;font-size:13.5px;font-weight:700;cursor:pointer;
+    margin-top:12px;font-family:inherit;
+  }
+  .donebtn.marked{background:var(--green);color:#fff}
+
+  /* dictionary */
+  .wgroup{font-size:12px;font-weight:800;color:var(--gray);letter-spacing:.07em;margin:20px 2px 10px;text-transform:uppercase}
+  .wcard{
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:13px 15px;margin-bottom:9px;cursor:pointer;
+  }
+  .wcard.playing{border-color:var(--blue);background:#EFF6FF}
+  .w-jp{font-size:18px;font-weight:700}
+  .w-ro{font-size:12px;color:var(--gray);font-style:italic;margin-top:1px}
+  .w-ru{font-size:13.5px;margin-top:3px;font-weight:500}
+  .w-note{font-size:12px;color:var(--gray);margin-top:4px;line-height:1.5}
+  .footnote{font-size:11.5px;color:var(--gray);margin-top:20px;line-height:1.6}
+
+  /* progress heatmap */
+  .yearrow{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px}
+  .yearrow button{
+    width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff;
+    font-size:14px;cursor:pointer;font-family:inherit;
+  }
+  .yearrow .yearlabel{font-size:16px;font-weight:800}
+  .heatwrap{overflow-x:auto;padding-bottom:4px;margin-bottom:10px}
+  .heatgrid{display:inline-grid;grid-auto-flow:column;gap:3px}
+  .heatcol{display:grid;grid-template-rows:repeat(7,10px);gap:3px}
+  .heatcell{width:10px;height:10px;border-radius:2px;background:var(--panel)}
+  .heatcell.today{box-shadow:0 0 0 1.5px var(--blue)}
+  .heatmonths{display:inline-flex;gap:0;font-size:10.5px;color:var(--gray);margin-bottom:4px;height:14px}
+  .heatlegend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray);flex-wrap:wrap;margin-bottom:22px}
+  .heatlegend .heatcell{width:10px;height:10px}
+
+  .stattiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+  .stattile{
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:14px 12px;text-align:center;
+  }
+  .stattile b{display:block;font-size:21px;font-weight:800;color:var(--blue)}
+  .stattile span{font-size:11.5px;color:var(--gray)}
+
+  /* backup */
+  .backuprow{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px}
+  .backuprow label.chip{display:inline-block}
+  .backup-status{font-size:11.5px;color:var(--gray);margin-top:8px;min-height:15px;line-height:1.4}
+  .backup-status.ok{color:var(--green)}
+  .backup-status.err{color:var(--pink)}
+</style>
+</head>
+<body>
+
+<div class="banner">🔊 Tap any line to hear it · Best with the enhanced Japanese voice (Kyoko)</div>
+<div class="header">
+  <div class="logo"><span class="jp">会話</span><span class="logo-em">KAIWA</span></div>
+  <div class="header-stat" id="headerStat"></div>
+</div>
+
+<div class="screen active" id="home">
+  <h2>Japanese Dialogues</h2>
+  <div class="sub">Living Japanese for daily life · Toyama</div>
+  <div id="cats"></div>
+  <div class="backuprow">
+    <button class="chip" id="btnExport">Save backup</button>
+    <label class="chip" for="fileImport">Restore backup</label>
+    <input type="file" id="fileImport" accept="application/json,.json" hidden>
+  </div>
+  <div class="backup-status" id="backupStatus"></div>
+  <div class="footnote">
+    Learn your own lines first (blue 私 marker). Then switch on <b>Recall</b> mode: your lines get blurred — say them out loud from memory, tap to check. Use <b>A–B</b> + <b>Loop</b> + <b>Pause</b> for shadowing drills.
+  </div>
+</div>
+
+<div class="screen" id="catScreen">
+  <button class="crumb" onclick="goHome()">← Back to categories</button>
+  <h2 id="catTitle"></h2>
+  <div class="sub" id="catSub"></div>
+  <div id="dcards"></div>
+</div>
+
+<div class="screen" id="dialogScreen">
+  <button class="crumb" onclick="backToCat()">← Back to list</button>
+  <h2 id="dTitle" style="font-size:19px"></h2>
+  <div class="sub" id="dSub"></div>
+  <div class="toolrow">
+    <button class="chip rate" data-rate="0.6">0.6×</button>
+    <button class="chip rate on" data-rate="0.8">0.8×</button>
+    <button class="chip rate" data-rate="1">1×</button>
+    <button class="chip on" id="tglRomaji">Romaji</button>
+    <button class="chip on" id="tglRu">Translation</button>
+    <button class="chip acc" id="tglRecall">Recall</button>
+  </div>
+  <div class="toolrow">
+    <button class="chip" id="tglLoop">🔁 Loop</button>
+    <button class="chip" id="tglRange">A–B section</button>
+    <button class="chip" id="tglPause">⏸ Pause to repeat</button>
+  </div>
+  <div class="hintbox recall-hint">Your lines are hidden. Read the translation, say the phrase out loud, then tap to check yourself.</div>
+  <div class="hintbox range-hint" id="rangeHint">Tap the first line of the section, then the last one. Tap again to start a new section.</div>
+  <button class="bigplay" id="playAll">▶ Play whole dialogue</button>
+  <div id="lines"></div>
+  <button class="donebtn" id="doneBtn">✓ Mark as learned</button>
+</div>
+
+<div class="screen" id="wordsScreen">
+  <button class="crumb" onclick="goHome()">← Back to categories</button>
+  <h2>Dictionary</h2>
+  <div class="sub">Toyama dialect & reaction words · tap to hear</div>
+  <div id="wordsBox"></div>
+</div>
+
+<div class="screen" id="progressScreen">
+  <button class="crumb" onclick="goHome()">← Back to categories</button>
+  <h2>Progress</h2>
+  <div class="sub">Time spent studying, tracked automatically while this tab is open and active</div>
+  <div class="yearrow">
+    <button id="yearPrev" aria-label="Previous year">‹</button>
+    <div class="yearlabel" id="yearLabel"></div>
+    <button id="yearNext" aria-label="Next year">›</button>
+  </div>
+  <div class="heatwrap">
+    <div>
+      <div class="heatmonths" id="heatMonths"></div>
+      <div class="heatgrid" id="heatGrid"></div>
+    </div>
+  </div>
+  <div class="heatlegend">
+    <span>Less</span>
+    <div class="heatcell" data-level="0"></div>
+    <div class="heatcell" data-level="1"></div>
+    <div class="heatcell" data-level="2"></div>
+    <div class="heatcell" data-level="3"></div>
+    <div class="heatcell" data-level="4"></div>
+    <div class="heatcell" data-level="5"></div>
+    <span>More</span>
+    <span>&nbsp;·&nbsp;15 min / 30 min / 1 hour / 3 hours / 6+ hours</span>
+  </div>
+  <div class="stattiles">
+    <div class="stattile"><b id="statTotal"></b><span id="statTotalYear">Total</span></div>
+    <div class="stattile"><b id="statDays"></b><span>Days studied</span></div>
+    <div class="stattile"><b id="statStreak"></b><span>Day streak</span></div>
+    <div class="stattile"><b id="statBest"></b><span>Best day</span></div>
+  </div>
+  <div class="footnote">Counts wall-clock time the app is open and the tab is visible — same idea as an editor's time tracker, not a measure of how well you know the material. Tracking starts from today; there is no data before this feature existed.</div>
+</div>
+
+<script src="data.js"></script>
+<script>
+// ================= STATE =================
+let rate=0.8, jaVoice=null, curCat=null, curDlg=null, playAllActive=false;
+let loopOn=false, pauseOn=false, rangeMode=false, rangeA=null, rangeB=null;
+let romajiOn=true, ruOn=true;
+const done=new Set();
+// Stable key: titles survive reordering and inserting dialogues, positions do not.
+const key=(c,d)=>CATS[c].title+'::'+CATS[c].dialogs[d].title;
+
+const totalDialogs = CATS.reduce((s,c)=>s+c.dialogs.length,0);
+
+// ================= PERSISTENCE =================
+const STORE_DONE='kaiwa.done', STORE_SETTINGS='kaiwa.settings';
+const RATES=[0.6,0.8,1];
+
+// localStorage throws in Safari private mode and on quota overflow.
+// Persistence is a convenience — its failure must never break the app.
+function lsRead(k,fallback){
+  try{const raw=localStorage.getItem(k);return raw===null?fallback:JSON.parse(raw);}
+  catch(e){console.warn('kaiwa: cannot read '+k,e);return fallback;}
+}
+function lsWrite(k,value){
+  try{localStorage.setItem(k,JSON.stringify(value));}
+  catch(e){console.warn('kaiwa: cannot save '+k+' — progress stays in memory only',e);}
+}
+
+function saveDone(){lsWrite(STORE_DONE,[...done]);}   // a Set serializes to {} — spread it first
+function saveSettings(){lsWrite(STORE_SETTINGS,{rate,romajiOn,ruOn,loopOn,pauseOn});}
+
+// Keys of dialogues that exist right now — anything else is stale or foreign.
+function validKeys(){
+  const valid=new Set();
+  CATS.forEach((c,i)=>c.dialogs.forEach((_,j)=>valid.add(key(i,j))));
+  return valid;
+}
+
+// Both storage and imported files are untrusted input: validate every field
+// instead of assigning it. Shared so the two paths cannot drift apart.
+function applySettings(s){
+  if(!s||typeof s!=='object')return;
+  if(RATES.includes(s.rate))rate=s.rate;
+  if(typeof s.romajiOn==='boolean')romajiOn=s.romajiOn;
+  if(typeof s.ruOn==='boolean')ruOn=s.ruOn;
+  if(typeof s.loopOn==='boolean')loopOn=s.loopOn;
+  if(typeof s.pauseOn==='boolean')pauseOn=s.pauseOn;
+}
+
+function loadState(){
+  // Drop keys of dialogues that no longer exist, so the "learned" counter cannot drift.
+  const valid=validKeys();
+  const savedDone=lsRead(STORE_DONE,[]);
+  if(Array.isArray(savedDone))savedDone.forEach(k=>{if(valid.has(k))done.add(k);});
+  applySettings(lsRead(STORE_SETTINGS,null));
+}
+
+// ================= ACTIVITY (study-time tracker) =================
+// A day counts as "studied" for however long the tab was visible and in the
+// foreground that day — the same definition an editor's time tracker uses.
+// It says nothing about *what* was practiced, only that the app was open and active.
+const STORE_ACTIVITY='kaiwa.activity';
+const activity=lsRead(STORE_ACTIVITY,{});   // { "YYYY-MM-DD": totalSeconds }, local calendar days
+if(typeof activity!=='object'||activity===null||Array.isArray(activity)){
+  // Corrupted or hand-edited storage: reset rather than crash on the next line.
+  Object.keys(activity).forEach(k=>delete activity[k]);
+}
+
+// Local calendar day, not UTC — a daily habit tracker must follow the user's own clock.
+function localDateKey(d){
+  const tz=d.getTimezoneOffset()*60000;
+  return new Date(d.getTime()-tz).toISOString().slice(0,10);
+}
+
+let lastTick=null;
+// Credits elapsed time to `activity`, splitting across midnight so a session
+// that runs past 00:00 lands partly on each calendar day, not all on one.
+function addElapsed(){
+  if(lastTick===null)return;
+  let from=lastTick;const now=Date.now();let remaining=(now-from)/1000;
+  while(remaining>0){
+    const from_d=new Date(from);
+    const dayKey=localDateKey(from_d);
+    const dayEnd=new Date(from_d);dayEnd.setHours(24,0,0,0);
+    const untilMidnight=(dayEnd.getTime()-from)/1000;
+    const chunk=Math.min(remaining,untilMidnight);
+    activity[dayKey]=(activity[dayKey]||0)+chunk;
+    remaining-=chunk;from=dayEnd.getTime();
+  }
+  lastTick=now;
+}
+function flushActivity(){addElapsed();lsWrite(STORE_ACTIVITY,activity);}
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){flushActivity();lastTick=null;}
+  else{lastTick=Date.now();}
+});
+window.addEventListener('pagehide',flushActivity);
+window.addEventListener('beforeunload',flushActivity);
+// A 5s heartbeat keeps loss to a few seconds if the tab is killed without
+// pagehide firing — common on iOS when the app is swiped away, not just closed.
+setInterval(()=>{if(!document.hidden)addElapsed();flushActivity();},5000);
+if(!document.hidden)lastTick=Date.now();
+
+function activityLevel(seconds){
+  if(!seconds)return 0;
+  if(seconds<900)return 1;    // <15 min
+  if(seconds<1800)return 2;   // <30 min
+  if(seconds<3600)return 3;   // <1 hour
+  if(seconds<10800)return 4;  // <3 hours
+  return 5;                   // 3h+
+}
+
+function currentStreak(){
+  addElapsed();
+  let d=new Date();
+  // Not having studied *yet today* must not zero the streak before midnight.
+  if(!(activity[localDateKey(d)]>0))d.setDate(d.getDate()-1);
+  let streak=0;
+  while(activity[localDateKey(d)]>0){streak++;d.setDate(d.getDate()-1);}
+  return streak;
+}
+
+// Restored variables must be mirrored onto the chips, or state and UI drift apart.
+function syncSettingsUI(){
+  document.querySelectorAll('.rate').forEach(b=>b.classList.toggle('on',parseFloat(b.dataset.rate)===rate));
+  document.getElementById('tglRomaji').classList.toggle('on',romajiOn);
+  document.getElementById('tglRu').classList.toggle('on',ruOn);
+  document.getElementById('tglLoop').classList.toggle('on',loopOn);
+  document.getElementById('tglPause').classList.toggle('on',pauseOn);
+}
+
+// ================= BACKUP =================
+// localStorage dies with the browser profile: clearing Safari history, switching
+// device or moving to another domain all wipe it. A file is the only way out.
+const BACKUP_APP='kaiwa-trainer', BACKUP_VERSION=2;   // v2 added `activity`; v1 files still restore fine
+
+function backupStatus(msg,kind){
+  const el=document.getElementById('backupStatus');
+  el.textContent=msg;
+  el.className='backup-status'+(kind?' '+kind:'');
+}
+
+function exportProgress(){
+  flushActivity();
+  const payload={app:BACKUP_APP,version:BACKUP_VERSION,exported:new Date().toISOString(),
+    done:[...done],settings:{rate,romajiOn,ruOn,loopOn,pauseOn},activity};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');
+  a.href=url;a.download='kaiwa-progress-'+payload.exported.slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  backupStatus(`Saved a backup of ${done.size} learned ${done.size===1?'dialogue':'dialogues'}.`,'ok');
+}
+
+function importProgress(file){
+  const reader=new FileReader();
+  reader.onerror=()=>backupStatus('Could not read that file.','err');
+  reader.onload=()=>{
+    let data;
+    try{data=JSON.parse(reader.result);}
+    catch(e){backupStatus('That file is not valid JSON.','err');return;}
+    if(!data||data.app!==BACKUP_APP||!Array.isArray(data.done)){
+      backupStatus('That is not a KAIWA backup file.','err');return;
+    }
+    // Merge, never replace: restoring an old backup must not erase newer progress.
+    const valid=validKeys(), before=done.size;
+    let unknown=0;
+    data.done.forEach(k=>{if(valid.has(k))done.add(k);else unknown++;});
+    applySettings(data.settings);
+    // Same principle for time: a backup from another device ADDS its minutes to
+    // today's device, it never overwrites what this device already tracked.
+    if(data.activity&&typeof data.activity==='object'&&!Array.isArray(data.activity)){
+      flushActivity();
+      Object.entries(data.activity).forEach(([day,secs])=>{
+        if(/^\d{4}-\d{2}-\d{2}$/.test(day)&&typeof secs==='number'&&isFinite(secs)&&secs>=0){
+          activity[day]=(activity[day]||0)+secs;
+        }
+      });
+      lsWrite(STORE_ACTIVITY,activity);
+    }
+    saveDone();saveSettings();syncSettingsUI();updateHeaderStat();renderHome();
+    backupStatus(`Restored: ${done.size-before} added, ${done.size} learned in total`+
+      (unknown?`. ${unknown} unknown ${unknown===1?'entry':'entries'} skipped`:'')+'.','ok');
+  };
+  reader.readAsText(file);
+}
+
+function updateHeaderStat(){
+  document.getElementById('headerStat').textContent=
+    `${CATS.length} categories · ${totalDialogs} dialogues`+(done.size?` · ${done.size} learned`:'');
+}
+
+function pickVoice(){
+  const vs=speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.startsWith('ja'));
+  if(!vs.length)return null;
+  for(const p of ['kyoko','o-ren','otoya','hattori','google']){
+    const hit=vs.find(v=>v.name.toLowerCase().includes(p));
+    if(hit)return hit;
+  }
+  return vs[0];
+}
+speechSynthesis.onvoiceschanged=()=>{jaVoice=pickVoice();};
+jaVoice=pickVoice();
+
+function speak(text,onend){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text.replace(/<[^>]+>/g,''));
+  u.lang='ja-JP';
+  if(!jaVoice)jaVoice=pickVoice();
+  if(jaVoice)u.voice=jaVoice;
+  u.rate=rate;
+  if(onend){u.onend=onend;u.onerror=onend;}
+  speechSynthesis.speak(u);
+}
+
+// ================= SCREENS =================
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function renderHome(){
+  const box=document.getElementById('cats');
+  box.innerHTML='';
+  CATS.forEach((c,i)=>{
+    const doneCount=c.dialogs.filter((_,j)=>done.has(key(i,j))).length;
+    const el=document.createElement('div');
+    el.className='card';
+    el.innerHTML=`<div class="card-kanji">${c.kanji}</div>
+      <div class="card-body">
+        <div class="card-title">${c.title}</div>
+        <div class="card-meta">${c.sub}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="count-pink">${c.dialogs.length}</div>
+        ${doneCount>0?`<div class="badge done">${doneCount} learned</div>`:''}
+      </div>`;
+    el.onclick=()=>openCat(i);
+    box.appendChild(el);
+  });
+  const w=document.createElement('div');
+  w.className='card';
+  w.innerHTML=`<div class="card-kanji" style="background:var(--pink)">言</div>
+    <div class="card-body">
+      <div class="card-title">Dictionary</div>
+      <div class="card-meta">Toyama dialect · reaction words</div>
+    </div>
+    <div class="badge">NEW</div>`;
+  w.onclick=openWords;
+  box.appendChild(w);
+
+  const p=document.createElement('div');
+  p.className='card';
+  p.innerHTML=`<div class="card-kanji" style="background:var(--blue)">進</div>
+    <div class="card-body">
+      <div class="card-title">Progress</div>
+      <div class="card-meta">Study time · streak</div>
+    </div>`;
+  p.onclick=openProgress;
+  box.appendChild(p);
+}
+
+function openCat(i){
+  curCat=i;
+  stopAll();
+  const c=CATS[i];
+  document.getElementById('catTitle').textContent=c.title;
+  document.getElementById('catSub').textContent=c.sub;
+  const box=document.getElementById('dcards');
+  box.innerHTML='';
+  c.dialogs.forEach((d,j)=>{
+    const isDone=done.has(key(i,j));
+    const el=document.createElement('div');
+    el.className='card';
+    el.innerHTML=`<div class="card-body">
+        <div class="card-title">${d.title}</div>
+        <div class="card-meta jp">${d.sub} · ${d.lines.length} lines</div>
+      </div>
+      ${isDone?'<div class="badge done">✓ learned</div>':'<div class="badge" style="background:var(--blue)">study</div>'}`;
+    el.onclick=()=>openDialog(j);
+    box.appendChild(el);
+  });
+  show('catScreen');
+}
+
+function openDialog(j){
+  curDlg=j;
+  stopAll();
+  const d=CATS[curCat].dialogs[j];
+  document.getElementById('dTitle').textContent=d.title;
+  document.getElementById('dSub').textContent=d.sub;
+  const box=document.getElementById('lines');
+  box.classList.remove('recall');
+  document.getElementById('tglRecall').classList.remove('on');
+  box.innerHTML='';
+  rangeA=null;rangeB=null;
+  d.lines.forEach(([who,jp,ro,ru],idx)=>{
+    const row=document.createElement('div');
+    row.className='lineRow'+(who==='me'?' mine':'');
+    row.dataset.jp=jp.replace(/<[^>]+>/g,'');
+    row.dataset.idx=idx;
+    row.innerHTML=`<div class="who ${who}">${who==='me'?'私':'彼'}</div>
+      <div class="lineBody">
+        <div class="jp">${jp}</div>
+        <div class="romaji ${romajiOn?'':'hiddenEl'}">${ro}</div>
+        <div class="ru ${ruOn?'':'hiddenEl'}">${ru}</div>
+      </div>`;
+    row.onclick=()=>{
+      if(rangeMode){setRange(idx);return;}
+      stopAll();
+      if(box.classList.contains('recall')&&row.classList.contains('mine')){
+        row.classList.add('revealed');
+      }
+      row.classList.add('playing');
+      speak(row.dataset.jp,()=>row.classList.remove('playing'));
+    };
+    box.appendChild(row);
+  });
+  updateRangeUI();
+  const db=document.getElementById('doneBtn');
+  const k=key(curCat,curDlg);
+  db.classList.toggle('marked',done.has(k));
+  db.textContent=done.has(k)?'✓ Learned!':'✓ Mark as learned';
+  show('dialogScreen');
+}
+
+function goHome(){stopAll();renderHome();show('home');}
+function backToCat(){stopAll();openCat(curCat);}
+
+function openWords(){
+  stopAll();
+  const box=document.getElementById('wordsBox');
+  box.innerHTML='';
+  WORDS.forEach(g=>{
+    const h=document.createElement('div');
+    h.className='wgroup';
+    h.textContent=g.group;
+    box.appendChild(h);
+    g.items.forEach(([jp,ro,ru,note])=>{
+      const el=document.createElement('div');
+      el.className='wcard';
+      el.innerHTML=`<div class="w-jp">${jp}</div>
+        <div class="w-ro">${ro}</div>
+        <div class="w-ru">${ru}</div>
+        <div class="w-note">${note}</div>`;
+      el.onclick=()=>{
+        document.querySelectorAll('.wcard.playing').forEach(x=>x.classList.remove('playing'));
+        el.classList.add('playing');
+        speak(jp,()=>el.classList.remove('playing'));
+      };
+      box.appendChild(el);
+    });
+  });
+  show('wordsScreen');
+}
+
+// ================= PROGRESS =================
+let progressYear=null;
+const MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtHours(seconds){
+  const h=seconds/3600;
+  if(h<1)return Math.round(seconds/60)+'m';
+  return (Math.round(h*10)/10)+'h';
+}
+
+function openProgress(){
+  stopAll();
+  flushActivity();
+  if(progressYear===null)progressYear=new Date().getFullYear();
+  renderProgress();
+  show('progressScreen');
+}
+
+function changeProgressYear(delta){
+  progressYear+=delta;
+  renderProgress();
+}
+
+function renderProgress(){
+  document.getElementById('yearLabel').textContent=progressYear;
+  const todayKey=localDateKey(new Date());
+
+  // Grid: Monday-start weeks as columns, Mon..Sun as the 7 rows in each column —
+  // same layout convention as GitHub's contribution graph.
+  const jan1=new Date(progressYear,0,1);
+  const mondayOffset=(jan1.getDay()+6)%7;              // days to step back to that week's Monday
+  const gridStart=new Date(progressYear,0,1-mondayOffset);
+  const dec31=new Date(progressYear,11,31);
+  const totalDays=Math.ceil((dec31-gridStart)/86400000)+1;
+  const totalWeeks=Math.ceil(totalDays/7);
+
+  const grid=document.getElementById('heatGrid');
+  grid.innerHTML='';
+  const monthsRow=document.getElementById('heatMonths');
+  monthsRow.innerHTML='';
+  let lastMonth=-1;
+
+  for(let w=0;w<totalWeeks;w++){
+    const col=document.createElement('div');
+    col.className='heatcol';
+    let colMonth=-1;
+    for(let r=0;r<7;r++){
+      const d=new Date(gridStart);
+      d.setDate(gridStart.getDate()+w*7+r);
+      const cell=document.createElement('div');
+      cell.className='heatcell';
+      if(d.getFullYear()===progressYear){
+        const dKey=localDateKey(d);
+        const secs=activity[dKey]||0;
+        cell.dataset.level=activityLevel(secs);
+        cell.title=dKey+' — '+(secs?fmtHours(secs):'no activity');
+        if(dKey===todayKey)cell.classList.add('today');
+        if(r===0)colMonth=d.getMonth();
+      }else{
+        cell.style.visibility='hidden';   // pads the grid to a full week without showing foreign days
+      }
+      col.appendChild(cell);
+    }
+    grid.appendChild(col);
+    const label=document.createElement('div');
+    label.style.width='13px';
+    if(colMonth!==-1&&colMonth!==lastMonth){label.textContent=MONTH_NAMES[colMonth];lastMonth=colMonth;}
+    monthsRow.appendChild(label);
+  }
+  document.querySelectorAll('.heatcell[data-level]').forEach(c=>{
+    const lvl=+c.dataset.level;
+    c.style.background=lvl===0?'var(--panel)':`color-mix(in srgb, var(--blue) ${20+lvl*16}%, white)`;
+  });
+  document.querySelectorAll('.heatlegend .heatcell').forEach(c=>{
+    const lvl=+c.dataset.level;
+    c.style.background=lvl===0?'var(--panel)':`color-mix(in srgb, var(--blue) ${20+lvl*16}%, white)`;
+  });
+
+  // Stats, scoped to the year being viewed.
+  const prefix=progressYear+'-';
+  const yearEntries=Object.entries(activity).filter(([k])=>k.startsWith(prefix));
+  const totalSecs=yearEntries.reduce((s,[,v])=>s+v,0);
+  const bestSecs=yearEntries.reduce((m,[,v])=>Math.max(m,v),0);
+  document.getElementById('statTotal').textContent=totalSecs?fmtHours(totalSecs):'0h';
+  document.getElementById('statTotalYear').textContent='Total ('+progressYear+')';
+  document.getElementById('statDays').textContent=yearEntries.filter(([,v])=>v>0).length;
+  document.getElementById('statStreak').textContent=currentStreak();
+  document.getElementById('statBest').textContent=bestSecs?fmtHours(bestSecs):'—';
+}
+
+// ================= PLAYBACK =================
+function stopAll(){
+  speechSynthesis.cancel();
+  playAllActive=false;
+  document.querySelectorAll('.lineRow.playing').forEach(r=>r.classList.remove('playing'));
+  const b=document.getElementById('playAll');
+  b.classList.remove('playing');
+  b.textContent=(rangeA!==null&&rangeB!==null)
+    ?`▶ Play section (${rangeA+1}–${rangeB+1})`
+    :'▶ Play whole dialogue';
+}
+function setRange(idx){
+  if(rangeA===null||rangeB!==null){rangeA=idx;rangeB=null;}
+  else{
+    rangeB=idx;
+    if(rangeB<rangeA){const t=rangeA;rangeA=rangeB;rangeB=t;}
+  }
+  updateRangeUI();
+}
+function updateRangeUI(){
+  const rows=[...document.getElementById('lines').querySelectorAll('.lineRow')];
+  rows.forEach((r,i)=>{
+    r.classList.remove('inRange','rangeEdge');
+    if(rangeA!==null){
+      const b=(rangeB!==null?rangeB:rangeA);
+      if(i>=rangeA&&i<=b)r.classList.add('inRange');
+      if(i===rangeA||i===b)r.classList.add('rangeEdge');
+    }
+  });
+  const btn=document.getElementById('playAll');
+  if(!playAllActive){
+    btn.textContent=(rangeA!==null&&rangeB!==null)
+      ?`▶ Play section (${rangeA+1}–${rangeB+1})`
+      :'▶ Play whole dialogue';
+  }
+}
+document.getElementById('playAll').onclick=()=>{
+  if(playAllActive){stopAll();return;}
+  stopAll();
+  playAllActive=true;
+  const b=document.getElementById('playAll');
+  b.classList.add('playing');b.textContent='■ Stop';
+  const all=[...document.getElementById('lines').querySelectorAll('.lineRow')];
+  const from=(rangeA!==null&&rangeB!==null)?rangeA:0;
+  const to=(rangeA!==null&&rangeB!==null)?rangeB:all.length-1;
+  const rows=all.slice(from,to+1);
+  let i=0;
+  (function next(){
+    if(!playAllActive){stopAll();return;}
+    if(i>=rows.length){
+      if(loopOn){i=0;setTimeout(next,900);return;}
+      stopAll();return;
+    }
+    const r=rows[i++];
+    all.forEach(x=>x.classList.remove('playing'));
+    r.classList.add('playing');
+    r.scrollIntoView({block:'center',behavior:'smooth'});
+    const gap=pauseOn?Math.max(1600,r.dataset.jp.length*180):800;
+    speak(r.dataset.jp,()=>setTimeout(next,gap));
+  })();
+};
+
+// ================= CONTROLS =================
+document.querySelectorAll('.rate').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');rate=parseFloat(b.dataset.rate);saveSettings();
+  };
+});
+document.getElementById('tglRomaji').onclick=function(){
+  romajiOn=!romajiOn;this.classList.toggle('on');
+  document.querySelectorAll('.romaji').forEach(el=>el.classList.toggle('hiddenEl',!romajiOn));
+  saveSettings();
+};
+document.getElementById('tglRu').onclick=function(){
+  ruOn=!ruOn;this.classList.toggle('on');
+  document.querySelectorAll('.ru').forEach(el=>el.classList.toggle('hiddenEl',!ruOn));
+  saveSettings();
+};
+document.getElementById('tglRecall').onclick=function(){
+  this.classList.toggle('on');
+  const box=document.getElementById('lines');
+  box.classList.toggle('recall');
+  box.querySelectorAll('.mine').forEach(r=>r.classList.remove('revealed'));
+};
+document.getElementById('tglLoop').onclick=function(){
+  loopOn=!loopOn;this.classList.toggle('on');saveSettings();
+};
+document.getElementById('tglPause').onclick=function(){
+  pauseOn=!pauseOn;this.classList.toggle('on');saveSettings();
+};
+document.getElementById('tglRange').onclick=function(){
+  rangeMode=!rangeMode;this.classList.toggle('on');
+  document.getElementById('rangeHint').style.display=rangeMode?'block':'none';
+  if(!rangeMode){rangeA=null;rangeB=null;}
+  updateRangeUI();
+};
+document.getElementById('doneBtn').onclick=function(){
+  const k=key(curCat,curDlg);
+  if(done.has(k))done.delete(k);else done.add(k);
+  this.classList.toggle('marked',done.has(k));
+  this.textContent=done.has(k)?'✓ Learned!':'✓ Mark as learned';
+  saveDone();
+  updateHeaderStat();
+};
+
+document.getElementById('btnExport').onclick=exportProgress;
+document.getElementById('fileImport').onchange=function(){
+  if(this.files&&this.files[0])importProgress(this.files[0]);
+  this.value='';   // reset, so picking the same file twice fires onchange again
+};
+document.getElementById('yearPrev').onclick=()=>changeProgressYear(-1);
+document.getElementById('yearNext').onclick=()=>changeProgressYear(1);
+
+loadState();
+syncSettingsUI();
+updateHeaderStat();
+renderHome();
+</script>
+</body>
+</html>

@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>KAIWA Trainer</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B0B16">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<!-- The unprefixed name is the standard; iOS still reads the apple- one. -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KAIWA">
+<!-- black-translucent starts the page at y=0, under the status bar — see the
+     safe-area padding on .header and .screen below. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 <style>
   /* Self-hosted fonts: no third-party request, works offline, no visitor IP
      leaks to Google. Subsets are generated from this file's own text —
@@ -38,8 +50,12 @@
   .jp,.w-jp{font-family:'Zen Kaku Gothic New','Inter',sans-serif}
 
   /* header */
+  /* Standalone on iOS has no browser chrome: the shorthand padding stays as the
+     fallback, and the env() line — dropped as invalid where env() is unknown —
+     pushes the header clear of the notch and the screen clear of the home bar. */
   .header{
     background:var(--navy);color:#fff;padding:16px 18px;
+    padding-top:calc(16px + env(safe-area-inset-top));
     display:flex;align-items:baseline;gap:8px;
   }
   .logo{font-size:20px;font-weight:800;letter-spacing:-.02em}
@@ -47,7 +63,10 @@
   .logo-em{font-style:italic;font-weight:800}
   .header-stat{margin-left:auto;font-size:11.5px;color:#9CA3AF;font-weight:500}
 
-  .screen{display:none;padding:20px 16px 90px;min-height:60vh}
+  .screen{
+    display:none;padding:20px 16px 90px;min-height:60vh;
+    padding-bottom:calc(90px + env(safe-area-inset-bottom));
+  }
   .screen.active{display:block}
   .crumb{
     background:none;border:none;color:var(--blue);font-size:13px;font-weight:600;
@@ -845,6 +864,16 @@ loadState();
 syncSettingsUI();
 updateHeaderStat();
 renderHome();
+
+// ================= OFFLINE =================
+// Needs http(s) — index.html must still open straight from disk. Offline
+// support is a convenience; its failure must never break the app.
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js')
+      .catch(e=>console.warn('kaiwa: service worker not registered',e));
+  });
+}
 </script>
 </body>
 </html>

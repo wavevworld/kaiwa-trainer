@@ -4,7 +4,7 @@
 
 - [x] Extract dialogue data from index.html into app/data.js
 - [x] localStorage persistence: learned marks + settings survive reload
-- [ ] PWA: manifest.json, service worker (offline app shell) — icons 192/512/maskable/apple-touch are done, in `app/icons/`
+- [x] PWA: manifest.json, service worker (offline app shell) — icons 192/512/maskable/apple-touch in `app/icons/`
 - [ ] nginx static site config + certbot HTTPS on the existing droplet
 - [ ] Deploy script (rsync/scp one-liner)
 - [ ] "Add to Home Screen" instructions shown once on iPhone

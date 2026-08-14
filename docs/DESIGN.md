@@ -15,7 +15,6 @@ The app mirrors the owner's Figma design for his Akebono Shop project (clean e-c
 | --blue | #2563EB | primary buttons, study badge, playing state, 私 marker |
 | --pink | #E5007D | key-phrase highlight, counters, dictionary accent |
 | --green | #22C55E | learned badges, success |
-| --lime | #C6F04D | top banner |
 
 ## Typography
 
@@ -58,7 +57,7 @@ API with the `text=` parameter, then save the returned woff2 files over the old 
 - Badges: 10.5px uppercase 700, radius 5px (green=learned, blue=study, pink=NEW)
 - Chips (toggles): radius 9px, outline default, filled navy when active (pink for Recall)
 - Primary button: full-width, --blue, radius 12px, 700
-- Top: lime banner (12.5px, dark green text) + navy header with logo 会話KAIWA (jp regular + italic 800) and right-aligned gray stat
+- Top: navy header with logo 会話KAIWA (jp regular + italic 800) and right-aligned gray stat
 
 ## Voice & tone
 

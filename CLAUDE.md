@@ -20,7 +20,16 @@ Japanese dialogue trainer (see README.md). Current state: one working static HTM
 2. ~~**Persistence**~~ — done. `kaiwa.done` (array of stable "Category::Dialogue title" keys,
    not positional — survives reordering), `kaiwa.settings`, `kaiwa.activity` (per-day study
    seconds, see the Progress tracker below).
-3. **PWA**: manifest.json (name "KAIWA Trainer", standalone display, theme color #0B0B16), service worker with cache-first for the app shell — not started. Icons are done: `app/icons/` (192, 512, 512 maskable, 180 apple-touch-icon; navy bg, white 会話 glyph, generated via GDI+, see the icon script note below).
+3. ~~**PWA**: manifest.json, service worker (offline app shell)~~ — done. `app/manifest.json`
+   (standalone, theme/background #0B0B16, relative `start_url`/`scope` so a move off the
+   `/kaiwa-trainer/` subpath needs no edit) and `app/sw.js` (cache `kaiwa-v1`: fonts and icons
+   cache-first forever, `index.html`/`data.js` stale-while-revalidate with `cache:'no-cache'`
+   on the revalidation so GitHub Pages' own HTTP caching can't hide a new deploy — a push is
+   live on the next launch, no version string to bump). Registration is guarded by
+   `location.protocol` so `index.html` still opens from `file://`. iOS runs
+   `black-translucent`, hence the `env(safe-area-inset-*)` padding on `.header`/`.screen`.
+   Icons: `app/icons/` (192, 512, 512 maskable, 180 apple-touch-icon; navy bg, white 会話
+   glyph, generated via GDI+, see the icon script note below).
 4. **Deploy docs → deploy/**: nginx server block for a static site + certbot HTTPS steps for a DigitalOcean Ubuntu droplet; a one-line `scp` or rsync deploy script. Not started.
 5. ~~**export/import progress as JSON file**~~ — done, moved up from "later" since it's the only
    defence against a cleared Safari history or a domain change. Still later / ask first:

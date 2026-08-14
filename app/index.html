@@ -238,17 +238,17 @@
   <h2 id="dTitle" style="font-size:19px"></h2>
   <div class="sub" id="dSub"></div>
   <div class="toolrow">
-    <button class="chip rate" data-rate="0.6">0.6×</button>
-    <button class="chip rate on" data-rate="0.8">0.8×</button>
+    <button class="chip rate on" data-rate="0.6">0.6×</button>
+    <button class="chip rate" data-rate="0.8">0.8×</button>
     <button class="chip rate" data-rate="1">1×</button>
     <button class="chip on" id="tglRomaji">Romaji</button>
     <button class="chip on" id="tglRu">Translation</button>
     <button class="chip acc" id="tglRecall">Recall</button>
   </div>
   <div class="toolrow">
-    <button class="chip" id="tglLoop">🔁 Loop</button>
+    <button class="chip on" id="tglLoop">🔁 Loop</button>
     <button class="chip" id="tglRange">A–B section</button>
-    <button class="chip" id="tglPause">⏸ Pause to repeat</button>
+    <button class="chip on" id="tglPause">⏸ Pause to repeat</button>
   </div>
   <div class="hintbox recall-hint">Your lines are hidden. Read the translation, say the phrase out loud, then tap to check yourself.</div>
   <div class="hintbox range-hint" id="rangeHint">Tap the first line of the section, then the last one. Tap again to start a new section.</div>
@@ -302,8 +302,10 @@
 <script src="data.js"></script>
 <script>
 // ================= STATE =================
-let rate=0.8, jaVoice=null, curCat=null, curDlg=null, playAllActive=false;
-let loopOn=false, pauseOn=false, rangeMode=false, rangeA=null, rangeB=null;
+// Defaults are the shadowing setup: slow, both readings visible, loop and the
+// repeat gap already on — the state you actually drill in. Saved settings win.
+let rate=0.6, jaVoice=null, curCat=null, curDlg=null, playAllActive=false;
+let loopOn=true, pauseOn=true, rangeMode=false, rangeA=null, rangeB=null;
 let romajiOn=true, ruOn=true;
 const done=new Set();
 // Stable key: titles survive reordering and inserting dialogues, positions do not.

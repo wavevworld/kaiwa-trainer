@@ -32,8 +32,34 @@ Japanese dialogue trainer (see README.md). Current state: one working static HTM
    glyph, generated via GDI+, see the icon script note below).
 4. **Deploy docs → deploy/**: nginx server block for a static site + certbot HTTPS steps for a DigitalOcean Ubuntu droplet; a one-line `scp` or rsync deploy script. Not started.
 5. ~~**export/import progress as JSON file**~~ — done, moved up from "later" since it's the only
-   defence against a cleared Safari history or a domain change. Still later / ask first:
-   user-created dialogues, Capacitor wrapper for App Store.
+   defence against a cleared Safari history or a domain change.
+6. ~~**Dialogue editor**~~ — done, see below. Still later / ask first: Capacitor wrapper for
+   the App Store.
+
+## Dialogue editor (added 2026-08-19)
+
+The owner can change any line on the phone without a laptop. `CATS` in `data.js` stays the
+pristine source and is never written to; everything he changes lives in `kaiwa.edits`
+(`{v,overrides,created,nextId}`) and is layered on top by `buildData()` into `DATA`, which
+every screen reads instead of `CATS`. An override is a full snapshot of one dialogue, not a
+per-line diff — a diff breaks the moment a line is inserted upstream — so an edited dialogue
+is frozen until "Revert to original" drops the override.
+
+Three things worth remembering before touching this:
+
+- **Keys.** `key(c,d)` reads `_key` off the effective dialogue, computed from the *original*
+  title (`user::<id>` for created ones). That is what lets a dialogue be renamed without
+  orphaning its learned mark. Never go back to deriving the key from the current title.
+- **Highlights.** Built-in Japanese carries real `<b>` tags and is rendered raw. User text is
+  escaped and then `*stars*` become `<b>` — the editor shows only the star form. Anything
+  rendering user strings must go through `fmt(s,true)`, and `plain()` strips both forms for TTS.
+- **Unverified material.** Anything the owner wrote or edited is badged "✎ mine". This app
+  drills phrases into muscle memory, so a wrong sentence repeated forty times is worse than
+  no sentence — the badge is the only thing separating checked Japanese from typed Japanese.
+
+`lsWrite()` now returns whether the write landed: a failed settings toggle stays silent, a
+failed dialogue save keeps the editor open and says so, because the text on screen is the
+only copy.
 
 ## Progress tracker (added 2026-08-08)
 

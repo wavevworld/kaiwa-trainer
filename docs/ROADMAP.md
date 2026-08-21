@@ -20,10 +20,14 @@ Result: feels like a native app on the phone, works offline, progress persists. 
 ## Stage 2 — Content & learning features
 
 - [x] Dialogue translations switched from Russian to English (2026-08-08, explicit request)
-- [ ] User-created dialogues (form → same data format → localStorage)
-- [x] Export / import **progress** as a JSON file (done early — it is the only defence
+- [x] Dialogue editor: edit any line (Japanese / romaji / English / speaker), add and delete
+      lines, rename a dialogue, write new ones — inline on the dialogue screen, stored in
+      `kaiwa.edits`. `data.js` is never written to, so every built-in dialogue reverts in one
+      tap, and anything edited is badged "✎ mine" as unverified.
+- [x] Export / import as a JSON file (done early — it is the only defence
       against a cleared Safari history, a new device, or a change of domain).
-      Custom dialogues are not in the file yet; they do not exist yet.
+      Since `BACKUP_VERSION` 3 the file carries the edits too, so it is now the only
+      copy of anything written on the phone, not just a list of learned marks.
 - [ ] Per-line "hard" flag → personal drill list
 - [ ] Optional furigana rendering above kanji (ruby tags) — the user reads some kanji but not all
 - [ ] More dialogues: remaining JLPT N5 test scenes (bag shop, copies for 45 students, summer vacation/Mt. Fuji, hospital room amenities, café after-meal drinks), port workday set (foreman, lunch break, coworkers)

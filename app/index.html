@@ -159,6 +159,41 @@
   }
   .donebtn.marked{background:var(--green);color:#fff}
 
+  /* editor — practising and editing are different modes, so they never share
+     the screen: .editing hides every playback control and swaps in the form. */
+  #editBox{display:none}
+  .editing #editBox{display:block}
+  .editing .toolrow,
+  .editing .bigplay,
+  .editing #lines,
+  .editing .donebtn,
+  .editing .hintbox{display:none}
+  .edit-head label,.editRow label{
+    display:block;font-size:10px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--gray);margin:9px 0 3px;
+  }
+  .edit-head input,.editRow textarea{
+    width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+    font-family:inherit;font-size:14px;color:var(--ink);background:#fff;resize:vertical;
+  }
+  .edit-head input:focus,.editRow textarea:focus{outline:2px solid var(--blue);outline-offset:-1px}
+  .editRow textarea.ed-jp{font-family:'Zen Kaku Gothic New','Inter',sans-serif;font-size:16px}
+  .edit-head{margin-bottom:16px}
+  .editRow{
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px;margin-bottom:9px;
+  }
+  .editRowTop{display:flex;align-items:center;gap:9px}
+  .editRowTop .who{cursor:pointer;border:none;font-family:'Zen Kaku Gothic New',sans-serif}
+  .editRowTop .who.he{border:1px solid var(--line)}
+  .editIdx{flex:1;font-size:11px;color:var(--gray);font-weight:600}
+  .chip.tiny{padding:3px 10px;font-size:13px;line-height:1.2}
+  .chip.addline{width:100%;margin-bottom:12px}
+  .edit-actions{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+  .chip.save{background:var(--blue);color:#fff;border-color:var(--blue);flex:1}
+  .chip.danger{color:#B91C1C;border-color:#FECACA}
+  .badge.mine{background:#FDF2F8;color:#9D174D}
+
   /* dictionary */
   .wgroup{font-size:12px;font-weight:800;color:var(--gray);letter-spacing:.07em;margin:20px 2px 10px;text-transform:uppercase}
   .wcard{
@@ -249,11 +284,13 @@
     <button class="chip on" id="tglLoop">🔁 Loop</button>
     <button class="chip" id="tglRange">A–B section</button>
     <button class="chip on" id="tglPause">⏸ Pause to repeat</button>
+    <button class="chip" id="tglEdit">✎ Edit</button>
   </div>
   <div class="hintbox recall-hint">Your lines are hidden. Read the translation, say the phrase out loud, then tap to check yourself.</div>
   <div class="hintbox range-hint" id="rangeHint">Tap the first line of the section, then the last one. Tap again to start a new section.</div>
   <button class="bigplay" id="playAll">▶ Play whole dialogue</button>
   <div id="lines"></div>
+  <div id="editBox"></div>
   <button class="donebtn" id="doneBtn">✓ Mark as learned</button>
 </div>
 
@@ -309,9 +346,12 @@ let loopOn=true, pauseOn=true, rangeMode=false, rangeA=null, rangeB=null;
 let romajiOn=true, ruOn=true;
 const done=new Set();
 // Stable key: titles survive reordering and inserting dialogues, positions do not.
-const key=(c,d)=>CATS[c].title+'::'+CATS[c].dialogs[d].title;
+// It is read off the effective dialogue, not recomputed from its current title —
+// see buildData(): renaming a dialogue must not orphan its learned mark.
+const key=(c,d)=>DATA[c].dialogs[d]._key;
 
-const totalDialogs = CATS.reduce((s,c)=>s+c.dialogs.length,0);
+// A count, not a constant: the owner can add dialogues at runtime.
+const totalDialogs=()=>DATA.reduce((s,c)=>s+c.dialogs.length,0);
 
 // ================= PERSISTENCE =================
 const STORE_DONE='kaiwa.done', STORE_SETTINGS='kaiwa.settings';
@@ -323,9 +363,11 @@ function lsRead(k,fallback){
   try{const raw=localStorage.getItem(k);return raw===null?fallback:JSON.parse(raw);}
   catch(e){console.warn('kaiwa: cannot read '+k,e);return fallback;}
 }
+// Returns whether the write landed. A failed settings toggle is survivable and
+// stays silent; a failed dialogue save is not, and the editor says so out loud.
 function lsWrite(k,value){
-  try{localStorage.setItem(k,JSON.stringify(value));}
-  catch(e){console.warn('kaiwa: cannot save '+k+' — progress stays in memory only',e);}
+  try{localStorage.setItem(k,JSON.stringify(value));return true;}
+  catch(e){console.warn('kaiwa: cannot save '+k+' — progress stays in memory only',e);return false;}
 }
 
 function saveDone(){lsWrite(STORE_DONE,[...done]);}   // a Set serializes to {} — spread it first
@@ -334,9 +376,93 @@ function saveSettings(){lsWrite(STORE_SETTINGS,{rate,romajiOn,ruOn,loopOn,pauseO
 // Keys of dialogues that exist right now — anything else is stale or foreign.
 function validKeys(){
   const valid=new Set();
-  CATS.forEach((c,i)=>c.dialogs.forEach((_,j)=>valid.add(key(i,j))));
+  DATA.forEach(c=>c.dialogs.forEach(d=>valid.add(d._key)));
   return valid;
 }
+
+// ================= USER EDITS =================
+// CATS in data.js is curated material and is never written to. Everything the
+// owner changes lives here instead, layered on top at render time, so any
+// built-in dialogue can be put back exactly as it shipped.
+const STORE_EDITS='kaiwa.edits';
+
+function blankEdits(){return {v:1,overrides:{},created:[],nextId:1};}
+
+// Same rule as settings: storage and imported files are untrusted input, so
+// every field is validated instead of assigned. A malformed entry is dropped,
+// never trusted — it must not be able to break the dialogue list.
+function validDialog(d){
+  if(!d||typeof d!=='object'||!Array.isArray(d.lines))return null;
+  const lines=[];
+  d.lines.forEach(l=>{
+    if(!Array.isArray(l)||l.length<4)return;
+    const [who,jp,ro,en]=l;
+    if((who!=='me'&&who!=='he')||typeof jp!=='string')return;
+    lines.push([who,jp,typeof ro==='string'?ro:'',typeof en==='string'?en:'']);
+  });
+  if(!lines.length)return null;
+  return {title:typeof d.title==='string'?d.title:'Untitled',
+          sub:typeof d.sub==='string'?d.sub:'',lines};
+}
+
+function validEdits(raw){
+  const out=blankEdits();
+  if(!raw||typeof raw!=='object')return out;
+  if(raw.overrides&&typeof raw.overrides==='object'&&!Array.isArray(raw.overrides)){
+    Object.entries(raw.overrides).forEach(([k,d])=>{
+      const clean=validDialog(d);
+      if(typeof k==='string'&&clean)out.overrides[k]=clean;
+    });
+  }
+  if(Array.isArray(raw.created)){
+    raw.created.forEach(d=>{
+      const clean=validDialog(d);
+      if(clean&&typeof d.id==='string'&&typeof d.cat==='string'){
+        clean.id=d.id;clean.cat=d.cat;out.created.push(clean);
+      }
+    });
+  }
+  const n=Number(raw.nextId);
+  out.nextId=Number.isFinite(n)&&n>0?Math.floor(n):out.created.length+1;
+  return out;
+}
+
+let edits=validEdits(lsRead(STORE_EDITS,null));
+
+// The effective dataset every screen reads. An override replaces a built-in
+// dialogue wholesale rather than patching it line by line: a diff would break
+// the first time a line is inserted upstream in data.js. The cost is that an
+// edited dialogue is frozen at the version it was edited from — Revert undoes it.
+function buildData(){
+  const out=CATS.map(c=>({
+    kanji:c.kanji,title:c.title,sub:c.sub,
+    dialogs:c.dialogs.map(d=>{
+      const k=c.title+'::'+d.title;
+      const o=edits.overrides[k];
+      return o?{title:o.title,sub:o.sub,lines:o.lines,_key:k,_user:true}
+              :{title:d.title,sub:d.sub,lines:d.lines,_key:k,_user:false};
+    })
+  }));
+  const byTitle=new Map(out.map(c=>[c.title,c]));
+  edits.created.forEach(d=>{
+    const cat=byTitle.get(d.cat);
+    if(cat)cat.dialogs.push({title:d.title,sub:d.sub,lines:d.lines,
+      _key:'user::'+d.id,_user:true,_id:d.id});
+  });
+  return out;
+}
+
+let DATA=buildData();
+function refreshData(){DATA=buildData();updateHeaderStat();}
+
+// User text is never injected raw. It is escaped, then one convention is given
+// back: *text* renders as a pink highlight. The editor shows only that — typing
+// <b> on an iPhone keyboard is a punishment. Built-in text still carries real
+// <b> tags from data.js and is rendered unchanged.
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(s,user){return user?esc(s).replace(/\*([^*]+)\*/g,'<b>$1</b>'):s;}
+function bToStar(s){return String(s).replace(/<\/?b>/g,'*');}
+function plain(s){return String(s).replace(/<[^>]+>/g,'').replace(/\*/g,'');}
 
 // Both storage and imported files are untrusted input: validate every field
 // instead of assigning it. Shared so the two paths cannot drift apart.
@@ -435,7 +561,10 @@ function syncSettingsUI(){
 // ================= BACKUP =================
 // localStorage dies with the browser profile: clearing Safari history, switching
 // device or moving to another domain all wipe it. A file is the only way out.
-const BACKUP_APP='kaiwa-trainer', BACKUP_VERSION=2;   // v2 added `activity`; v1 files still restore fine
+// v2 added `activity`, v3 added `edits`; older files still restore fine.
+// From v3 the file is no longer only progress — it carries the only copy of
+// anything written on the phone, so losing it now loses content, not just marks.
+const BACKUP_APP='kaiwa-trainer', BACKUP_VERSION=3;
 
 function backupStatus(msg,kind){
   const el=document.getElementById('backupStatus');
@@ -446,13 +575,15 @@ function backupStatus(msg,kind){
 function exportProgress(){
   flushActivity();
   const payload={app:BACKUP_APP,version:BACKUP_VERSION,exported:new Date().toISOString(),
-    done:[...done],settings:{rate,romajiOn,ruOn,loopOn,pauseOn},activity};
+    done:[...done],settings:{rate,romajiOn,ruOn,loopOn,pauseOn},activity,edits};
   const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
   const a=document.createElement('a');
   a.href=url;a.download='kaiwa-progress-'+payload.exported.slice(0,10)+'.json';
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  backupStatus(`Saved a backup of ${done.size} learned ${done.size===1?'dialogue':'dialogues'}.`,'ok');
+  const mine=edits.created.length+Object.keys(edits.overrides).length;
+  backupStatus(`Saved a backup of ${done.size} learned ${done.size===1?'dialogue':'dialogues'}`+
+    (mine?` and ${mine} of your own ${mine===1?'edit':'edits'} — this file is the only copy`:'')+'.','ok');
 }
 
 function importProgress(file){
@@ -465,6 +596,9 @@ function importProgress(file){
     if(!data||data.app!==BACKUP_APP||!Array.isArray(data.done)){
       backupStatus('That is not a KAIWA backup file.','err');return;
     }
+    // Edits come back first: they create dialogues, and a key is only valid once
+    // the dialogue it points at exists.
+    const addedDialogs=mergeEdits(data.edits);
     // Merge, never replace: restoring an old backup must not erase newer progress.
     const valid=validKeys(), before=done.size;
     let unknown=0;
@@ -483,14 +617,41 @@ function importProgress(file){
     }
     saveDone();saveSettings();syncSettingsUI();updateHeaderStat();renderHome();
     backupStatus(`Restored: ${done.size-before} added, ${done.size} learned in total`+
+      (addedDialogs?`, ${addedDialogs} of your own ${addedDialogs===1?'dialogue':'dialogues'}`:'')+
       (unknown?`. ${unknown} unknown ${unknown===1?'entry':'entries'} skipped`:'')+'.','ok');
   };
   reader.readAsText(file);
 }
 
+// Edits merge like everything else in a backup: nothing already here is dropped.
+// Two versions of the same text cannot be reconciled, so an override simply wins.
+// An identical created dialogue is skipped — restoring the same file twice is a
+// normal thing to do and must not silently double the library.
+function mergeEdits(raw){
+  if(!raw)return 0;
+  const inc=validEdits(raw);
+  Object.entries(inc.overrides).forEach(([k,d])=>{edits.overrides[k]=d;});
+  const seen=new Map(edits.created.map(x=>[x.id,JSON.stringify(x)]));
+  let added=0;
+  inc.created.forEach(d=>{
+    let id=d.id;
+    if(seen.has(id)){
+      if(seen.get(id)===JSON.stringify(d))return;   // same dialogue, already here
+      id='u'+(edits.nextId++);
+    }
+    const rec={...d,id};
+    seen.set(id,JSON.stringify(rec));
+    edits.created.push(rec);added++;
+  });
+  edits.nextId=Math.max(edits.nextId,inc.nextId);
+  lsWrite(STORE_EDITS,edits);
+  refreshData();
+  return added;
+}
+
 function updateHeaderStat(){
   document.getElementById('headerStat').textContent=
-    `${CATS.length} categories · ${totalDialogs} dialogues`+(done.size?` · ${done.size} learned`:'');
+    `${DATA.length} categories · ${totalDialogs()} dialogues`+(done.size?` · ${done.size} learned`:'');
 }
 
 function pickVoice(){
@@ -526,7 +687,7 @@ function show(id){
 function renderHome(){
   const box=document.getElementById('cats');
   box.innerHTML='';
-  CATS.forEach((c,i)=>{
+  DATA.forEach((c,i)=>{
     const doneCount=c.dialogs.filter((_,j)=>done.has(key(i,j))).length;
     const el=document.createElement('div');
     el.className='card';
@@ -567,7 +728,7 @@ function renderHome(){
 function openCat(i){
   curCat=i;
   stopAll();
-  const c=CATS[i];
+  const c=DATA[i];
   document.getElementById('catTitle').textContent=c.title;
   document.getElementById('catSub').textContent=c.sub;
   const box=document.getElementById('dcards');
@@ -576,21 +737,31 @@ function openCat(i){
     const isDone=done.has(key(i,j));
     const el=document.createElement('div');
     el.className='card';
+    // The "mine" badge is not decoration: without it, Japanese I checked and
+    // Japanese the owner typed become indistinguishable within a week.
     el.innerHTML=`<div class="card-body">
-        <div class="card-title">${d.title}</div>
-        <div class="card-meta jp">${d.sub} · ${d.lines.length} lines</div>
+        <div class="card-title">${esc(d.title)}</div>
+        <div class="card-meta jp">${esc(d.sub)} · ${d.lines.length} lines</div>
       </div>
+      ${d._user?'<div class="badge mine">✎ mine</div>':''}
       ${isDone?'<div class="badge done">✓ learned</div>':'<div class="badge" style="background:var(--blue)">study</div>'}`;
     el.onclick=()=>openDialog(j);
     box.appendChild(el);
   });
+  const add=document.createElement('div');
+  add.className='card';
+  add.innerHTML=`<div class="card-body"><div class="card-title">+ New dialogue</div>
+      <div class="card-meta">Write your own lines in this category</div></div>`;
+  add.onclick=newDialog;
+  box.appendChild(add);
   show('catScreen');
 }
 
 function openDialog(j){
   curDlg=j;
   stopAll();
-  const d=CATS[curCat].dialogs[j];
+  const d=DATA[curCat].dialogs[j];
+  exitEdit();
   document.getElementById('dTitle').textContent=d.title;
   document.getElementById('dSub').textContent=d.sub;
   const box=document.getElementById('lines');
@@ -601,13 +772,15 @@ function openDialog(j){
   d.lines.forEach(([who,jp,ro,ru],idx)=>{
     const row=document.createElement('div');
     row.className='lineRow'+(who==='me'?' mine':'');
-    row.dataset.jp=jp.replace(/<[^>]+>/g,'');
+    row.dataset.jp=plain(jp);
     row.dataset.idx=idx;
+    // Romaji the owner left empty hides its row rather than showing a gap —
+    // and it is never guessed: kana could be transliterated, kanji could not.
     row.innerHTML=`<div class="who ${who}">${who==='me'?'私':'彼'}</div>
       <div class="lineBody">
-        <div class="jp">${jp}</div>
-        <div class="romaji ${romajiOn?'':'hiddenEl'}">${ro}</div>
-        <div class="ru ${ruOn?'':'hiddenEl'}">${ru}</div>
+        <div class="jp">${fmt(jp,d._user)}</div>
+        <div class="romaji ${romajiOn&&ro?'':'hiddenEl'}">${fmt(ro,d._user)}</div>
+        <div class="ru ${ruOn&&ru?'':'hiddenEl'}">${fmt(ru,d._user)}</div>
       </div>`;
     row.onclick=()=>{
       if(rangeMode){setRange(idx);return;}
@@ -628,8 +801,192 @@ function openDialog(j){
   show('dialogScreen');
 }
 
-function goHome(){stopAll();renderHome();show('home');}
-function backToCat(){stopAll();openCat(curCat);}
+// ================= EDITOR =================
+let editing=false, draft=null, freshId=null, pendingDelete=false;
+
+function exitEdit(){
+  editing=false;draft=null;pendingDelete=false;
+  document.getElementById('dialogScreen').classList.remove('editing');
+}
+
+// A dialogue created but never saved lives only in memory — leaving the screen
+// must not strand an empty card in the list.
+function discardFresh(){
+  if(!freshId)return;
+  edits.created=edits.created.filter(x=>x.id!==freshId);
+  freshId=null;
+  refreshData();
+}
+
+function editStatus(msg,kind){
+  const el=document.getElementById('edStatus');
+  if(!el)return;
+  el.textContent=msg;
+  el.className='backup-status'+(kind?' '+kind:'');
+}
+
+const SAVE_FAILED='Could not save — storage is full or this is a private window. '+
+  'Your text is still on screen; copy it out before leaving this page.';
+
+function enterEdit(){
+  stopAll();
+  const d=DATA[curCat].dialogs[curDlg];
+  // The draft is a deep copy: nothing is written until Save. <b> tags become
+  // *stars* so the editor has exactly one highlight convention.
+  draft={title:d.title,sub:d.sub,
+    lines:d.lines.map(l=>[l[0],bToStar(l[1]),l[2],l[3]])};
+  editing=true;pendingDelete=false;
+  document.getElementById('dialogScreen').classList.add('editing');
+  renderEditor();
+  window.scrollTo(0,0);
+}
+
+function renderEditor(){
+  const d=DATA[curCat].dialogs[curDlg];
+  const box=document.getElementById('editBox');
+  box.innerHTML=`
+    <div class="edit-head">
+      <label for="edTitle">Title</label>
+      <input id="edTitle" type="text">
+      <label for="edSub">Subtitle</label>
+      <input id="edSub" type="text">
+    </div>
+    <div id="edLines"></div>
+    <button class="chip addline" id="edAdd">+ Add line</button>
+    <div class="edit-actions">
+      <button class="chip" id="edCancel">Cancel</button>
+      ${d._id?'<button class="chip danger" id="edDelete">Delete dialogue</button>'
+            :(d._user?'<button class="chip" id="edRevert">Revert to original</button>':'')}
+      <button class="chip save" id="edSave">Save</button>
+    </div>
+    <div class="backup-status" id="edStatus"></div>
+    <div class="footnote">Wrap a phrase in *stars* to make it pink, the way the
+      built-in dialogues mark their key patterns. Romaji can be left empty — that
+      line just won't show one. Nothing you write here is checked by anyone: what
+      you type is what you will drill.</div>`;
+  document.getElementById('edTitle').value=draft.title;
+  document.getElementById('edSub').value=draft.sub;
+  document.getElementById('edAdd').onclick=()=>{
+    const last=draft.lines[draft.lines.length-1];
+    draft.lines.push([last&&last[0]==='me'?'he':'me','','','']);
+    renderEditLines();
+  };
+  document.getElementById('edSave').onclick=saveEdit;
+  document.getElementById('edCancel').onclick=cancelEdit;
+  const rev=document.getElementById('edRevert');
+  if(rev)rev.onclick=revertEdit;
+  const del=document.getElementById('edDelete');
+  if(del)del.onclick=deleteDialog;
+  renderEditLines();
+}
+
+// Rows are built with the DOM API and .value rather than innerHTML: user text
+// never has to survive a round trip through markup to reach a textarea.
+function renderEditLines(){
+  const wrap=document.getElementById('edLines');
+  wrap.innerHTML='';
+  draft.lines.forEach((l,i)=>{
+    const row=document.createElement('div');
+    row.className='editRow';
+    row.innerHTML=`<div class="editRowTop">
+        <button class="who ${l[0]}" data-act="who" title="Swap speaker">${l[0]==='me'?'私':'彼'}</button>
+        <span class="editIdx">Line ${i+1}</span>
+        <button class="chip tiny danger" data-act="del" title="Delete line">×</button>
+      </div>
+      <label>Japanese</label><textarea class="ed-jp jp" rows="2"></textarea>
+      <label>Romaji</label><textarea class="ed-ro" rows="1"></textarea>
+      <label>English</label><textarea class="ed-en" rows="2"></textarea>`;
+    const ta=row.querySelectorAll('textarea');
+    ta[0].value=l[1];ta[1].value=l[2];ta[2].value=l[3];
+    ta[0].oninput=()=>{l[1]=ta[0].value;};
+    ta[1].oninput=()=>{l[2]=ta[1].value;};
+    ta[2].oninput=()=>{l[3]=ta[2].value;};
+    row.querySelector('[data-act="who"]').onclick=()=>{
+      l[0]=l[0]==='me'?'he':'me';renderEditLines();
+    };
+    row.querySelector('[data-act="del"]').onclick=()=>{
+      if(draft.lines.length<=1)return;   // a dialogue with no lines is not a dialogue
+      draft.lines.splice(i,1);renderEditLines();
+    };
+    wrap.appendChild(row);
+  });
+}
+
+function saveEdit(){
+  draft.title=document.getElementById('edTitle').value.trim()||'Untitled';
+  draft.sub=document.getElementById('edSub').value.trim();
+  const d=DATA[curCat].dialogs[curDlg];
+  const payload={title:draft.title,sub:draft.sub,
+    lines:draft.lines.map(l=>[l[0],l[1],l[2],l[3]])};
+  const prev=JSON.stringify(edits);
+  if(d._id){
+    const rec=edits.created.find(x=>x.id===d._id);
+    if(rec){rec.title=payload.title;rec.sub=payload.sub;rec.lines=payload.lines;}
+  }else{
+    edits.overrides[d._key]=payload;
+  }
+  // On a failed write, memory is rolled back to match storage and the editor
+  // stays open — the alternative is a save that looks fine and is gone on reload.
+  if(!lsWrite(STORE_EDITS,edits)){
+    edits=validEdits(JSON.parse(prev));
+    editStatus(SAVE_FAILED,'err');return;
+  }
+  freshId=null;
+  exitEdit();refreshData();openDialog(curDlg);
+}
+
+function cancelEdit(){
+  if(freshId){exitEdit();backToCat();return;}
+  exitEdit();openDialog(curDlg);
+}
+
+function revertEdit(){
+  const d=DATA[curCat].dialogs[curDlg];
+  const prev=edits.overrides[d._key];
+  delete edits.overrides[d._key];
+  if(!lsWrite(STORE_EDITS,edits)){
+    edits.overrides[d._key]=prev;
+    editStatus(SAVE_FAILED,'err');return;
+  }
+  exitEdit();refreshData();openDialog(curDlg);
+}
+
+// Two taps rather than confirm(): a native modal blocks the page, and on a
+// phone the second tap is no slower than a dialog would be.
+function deleteDialog(){
+  const btn=document.getElementById('edDelete');
+  if(!pendingDelete){
+    pendingDelete=true;
+    btn.textContent='Tap again to delete';
+    editStatus('This dialogue and its learned mark will be gone for good.','err');
+    return;
+  }
+  const d=DATA[curCat].dialogs[curDlg];
+  const prev=edits.created;
+  edits.created=edits.created.filter(x=>x.id!==d._id);
+  if(!lsWrite(STORE_EDITS,edits)){
+    edits.created=prev;
+    editStatus(SAVE_FAILED,'err');return;
+  }
+  if(done.delete(d._key))saveDone();
+  freshId=null;
+  exitEdit();refreshData();backToCat();
+}
+
+// Nothing is written to storage here: an abandoned "+ New dialogue" tap must
+// not leave a blank card behind. The first Save is what commits it.
+function newDialog(){
+  const id='u'+(edits.nextId++);
+  edits.created.push({id,cat:DATA[curCat].title,title:'New dialogue',sub:'',
+    lines:[['me','','',''],['he','','','']]});
+  freshId=id;
+  refreshData();
+  openDialog(DATA[curCat].dialogs.length-1);
+  enterEdit();
+}
+
+function goHome(){exitEdit();discardFresh();stopAll();renderHome();show('home');}
+function backToCat(){exitEdit();discardFresh();stopAll();openCat(curCat);}
 
 function openWords(){
   stopAll();
@@ -839,6 +1196,7 @@ document.getElementById('tglLoop').onclick=function(){
 document.getElementById('tglPause').onclick=function(){
   pauseOn=!pauseOn;this.classList.toggle('on');saveSettings();
 };
+document.getElementById('tglEdit').onclick=()=>{editing?cancelEdit():enterEdit();};
 document.getElementById('tglRange').onclick=function(){
   rangeMode=!rangeMode;this.classList.toggle('on');
   document.getElementById('rangeHint').style.display=rangeMode?'block':'none';
